@@ -6,3 +6,7 @@
 results*.txt
 TestSuite*
 *.snap
+linuxdeploy-plugin-gtk.sh
+*.AppImage
+/AppDir
+/Czkawka
