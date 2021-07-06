@@ -38,6 +38,9 @@ pub struct GuiMainNotebook {
     pub check_button_music_album_title: gtk::CheckButton,
     pub check_button_music_album_artist: gtk::CheckButton,
     pub check_button_music_year: gtk::CheckButton,
+    pub check_button_exclusive: gtk::CheckButton,
+    pub check_button_images_exclusive: gtk::CheckButton,
+    pub check_button_music_exclusive: gtk::CheckButton,
 
     //// Radio Buttons
     // Duplicates
@@ -97,6 +100,9 @@ impl GuiMainNotebook {
         let check_button_music_album_title: gtk::CheckButton = builder.object("check_button_music_album_title").unwrap();
         let check_button_music_album_artist: gtk::CheckButton = builder.object("check_button_music_album_artist").unwrap();
         let check_button_music_year: gtk::CheckButton = builder.object("check_button_music_year").unwrap();
+        let check_button_exclusive: gtk::CheckButton = builder.object("check_button_exclusive").unwrap();
+        let check_button_images_exclusive: gtk::CheckButton = builder.object("check_button_images_exclusive").unwrap();
+        let check_button_music_exclusive: gtk::CheckButton = builder.object("check_button_music_exclusive").unwrap();
 
         //// Radio Buttons
         let radio_button_duplicates_name: gtk::RadioButton = builder.object("radio_button_duplicates_name").unwrap();
@@ -148,6 +154,9 @@ impl GuiMainNotebook {
             check_button_music_album_title,
             check_button_music_album_artist,
             check_button_music_year,
+            check_button_exclusive,
+            check_button_images_exclusive,
+            check_button_music_exclusive,
             radio_button_duplicates_name,
             radio_button_duplicates_size,
             radio_button_duplicates_hashmb,

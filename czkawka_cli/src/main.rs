@@ -40,6 +40,7 @@ fn main() {
             hash_type,
             file_to_save,
             not_recursive,
+            exclusive_path,
             allow_hard_links,
             dryrun,
         } => {
@@ -55,6 +56,7 @@ fn main() {
             df.set_delete_method(delete_method);
             df.set_hash_type(hash_type);
             df.set_recursive_search(!not_recursive.not_recursive);
+            df.set_exclusive_path(exclusive_path.exclusive_path);
             df.set_ignore_hard_links(!allow_hard_links.allow_hard_links);
             df.set_dryrun(dryrun.dryrun);
 
@@ -207,6 +209,7 @@ fn main() {
             minimal_file_size,
             similarity,
             not_recursive,
+            exclusive_path,
         } => {
             let mut sf = SimilarImages::new();
 
@@ -215,6 +218,7 @@ fn main() {
             sf.set_excluded_items(excluded_items.excluded_items);
             sf.set_minimal_file_size(minimal_file_size);
             sf.set_recursive_search(!not_recursive.not_recursive);
+            sf.set_exclusive_path(exclusive_path.exclusive_path);
             sf.set_similarity(similarity);
 
             sf.find_similar_images(None, None);
@@ -273,6 +277,7 @@ fn main() {
             // delete_files,
             file_to_save,
             not_recursive,
+            exclusive_path,
             minimal_file_size,
             music_similarity,
         } => {
@@ -283,6 +288,7 @@ fn main() {
             mf.set_excluded_items(excluded_items.excluded_items);
             mf.set_minimal_file_size(minimal_file_size);
             mf.set_recursive_search(!not_recursive.not_recursive);
+            mf.set_exclusive_path(exclusive_path.exclusive_path);
             mf.set_music_similarity(music_similarity);
 
             // if delete_files {

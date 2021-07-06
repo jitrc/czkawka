@@ -108,6 +108,13 @@ pub struct FileEntry {
     pub size: u64,
     pub modified_date: u64,
     pub hash: String,
+    pub base_path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct PathWithBase {
+    pub path: PathBuf,
+    pub base_path: PathBuf,
 }
 
 /// Info struck with helpful information's about results
@@ -144,6 +151,7 @@ pub struct DuplicateFinder {
     allowed_extensions: Extensions,
     excluded_items: ExcludedItems,
     recursive_search: bool,
+    exclusive_path: bool,
     minimal_file_size: u64,
     check_method: CheckingMethod,
     delete_method: DeleteMethod,
@@ -164,6 +172,7 @@ impl DuplicateFinder {
             files_with_identical_size: Default::default(),
             files_with_identical_hashes: Default::default(),
             recursive_search: true,
+            exclusive_path: false,
             allowed_extensions: Extensions::new(),
             check_method: CheckingMethod::None,
             delete_method: DeleteMethod::None,
@@ -280,6 +289,10 @@ impl DuplicateFinder {
         self.recursive_search = recursive_search;
     }
 
+    pub fn set_exclusive_path(&mut self, exclusive_path: bool) {
+        self.exclusive_path = exclusive_path;
+    }
+
     pub fn set_included_directory(&mut self, included_directory: Vec<PathBuf>) -> bool {
         self.directories.set_included_directory(included_directory, &mut self.text_messages)
     }
@@ -295,13 +308,25 @@ impl DuplicateFinder {
         self.excluded_items.set_excluded_items(excluded_items, &mut self.text_messages);
     }
 
+    fn check_exclusive_path(&self, vec_file_entry: &[FileEntry]) -> bool {
+        if !self.exclusive_path {
+            return true;
+        }
+        let mut new_vec = vec_file_entry.to_vec();
+        new_vec.dedup_by_key(|e| e.base_path.clone());
+        if new_vec.len() > 1 {
+            return true;
+        }
+        false
+    }
+
     fn check_files_name(&mut self, stop_receiver: Option<&Receiver<()>>, progress_sender: Option<&futures::channel::mpsc::UnboundedSender<ProgressData>>) -> bool {
         let start_time: SystemTime = SystemTime::now();
-        let mut folders_to_check: Vec<PathBuf> = Vec::with_capacity(1024 * 2); // This should be small enough too not see to big difference and big enough to store most of paths without needing to resize vector
+        let mut folders_to_check: Vec<PathWithBase> = Vec::with_capacity(1024 * 2); // This should be small enough too not see to big difference and big enough to store most of paths without needing to resize vector
 
         // Add root folders for finding
         for id in &self.directories.included_directories {
-            folders_to_check.push(id.clone());
+            folders_to_check.push(PathWithBase { path: id.clone(), base_path: id.clone() });
         }
 
         //// PROGRESS THREAD START
@@ -347,10 +372,10 @@ impl DuplicateFinder {
             let current_folder = folders_to_check.pop().unwrap();
 
             // Read current dir, if permission are denied just go to next
-            let read_dir = match fs::read_dir(&current_folder) {
+            let read_dir = match fs::read_dir(&current_folder.path) {
                 Ok(t) => t,
                 Err(_) => {
-                    self.text_messages.warnings.push(format!("Cannot open dir {}", current_folder.display()));
+                    self.text_messages.warnings.push(format!("Cannot open dir {}", current_folder.path.display()));
                     continue;
                 } // Permissions denied
             };
@@ -360,14 +385,14 @@ impl DuplicateFinder {
                 let entry_data = match entry {
                     Ok(t) => t,
                     Err(_) => {
-                        self.text_messages.warnings.push(format!("Cannot read entry in dir {}", current_folder.display()));
+                        self.text_messages.warnings.push(format!("Cannot read entry in dir {}", current_folder.path.display()));
                         continue 'dir;
                     } //Permissions denied
                 };
                 let metadata: Metadata = match entry_data.metadata() {
                     Ok(t) => t,
                     Err(_) => {
-                        self.text_messages.warnings.push(format!("Cannot read metadata in dir {}", current_folder.display()));
+                        self.text_messages.warnings.push(format!("Cannot read metadata in dir {}", current_folder.path.display()));
                         continue 'dir;
                     } //Permissions denied
                 };
@@ -376,7 +401,7 @@ impl DuplicateFinder {
                         continue 'dir;
                     }
 
-                    let next_folder = current_folder.join(entry_data.file_name());
+                    let next_folder = current_folder.path.join(entry_data.file_name());
                     if self.directories.is_excluded(&next_folder) {
                         continue 'dir;
                     }
@@ -385,7 +410,10 @@ impl DuplicateFinder {
                         continue 'dir;
                     }
 
-                    folders_to_check.push(next_folder);
+                    folders_to_check.push(PathWithBase {
+                        path: next_folder,
+                        base_path: current_folder.base_path.clone(),
+                    });
                 } else if metadata.is_file() {
                     atomic_file_counter.fetch_add(1, Ordering::Relaxed);
                     // let mut have_valid_extension: bool;
@@ -405,7 +433,7 @@ impl DuplicateFinder {
                     }
                     // Checking files
                     if metadata.len() >= self.minimal_file_size {
-                        let current_file_name = current_folder.join(entry_data.file_name());
+                        let current_file_name = current_folder.path.join(entry_data.file_name());
                         if self.excluded_items.is_excluded(&current_file_name) {
                             continue 'dir;
                         }
@@ -428,6 +456,7 @@ impl DuplicateFinder {
                                 } // Permissions Denied
                             },
                             hash: "".to_string(),
+                            base_path: current_folder.base_path.clone(),
                         };
 
                         // Adding files to BTreeMap
@@ -446,7 +475,7 @@ impl DuplicateFinder {
         let mut new_map: BTreeMap<String, Vec<FileEntry>> = Default::default();
 
         for (name, vector) in &self.files_with_identical_names {
-            if vector.len() > 1 {
+            if vector.len() > 1 && self.check_exclusive_path(vector) {
                 self.information.number_of_duplicated_files_by_name += vector.len() - 1;
                 self.information.number_of_groups_by_name += 1;
                 new_map.insert(name.clone(), vector.clone());
@@ -462,11 +491,11 @@ impl DuplicateFinder {
     /// If in box is only 1 result, then it is removed
     fn check_files_size(&mut self, stop_receiver: Option<&Receiver<()>>, progress_sender: Option<&futures::channel::mpsc::UnboundedSender<ProgressData>>) -> bool {
         let start_time: SystemTime = SystemTime::now();
-        let mut folders_to_check: Vec<PathBuf> = Vec::with_capacity(1024 * 2); // This should be small enough too not see to big difference and big enough to store most of paths without needing to resize vector
+        let mut folders_to_check: Vec<PathWithBase> = Vec::with_capacity(1024 * 2); // This should be small enough too not see to big difference and big enough to store most of paths without needing to resize vector
 
         // Add root folders for finding
         for id in &self.directories.included_directories {
-            folders_to_check.push(id.clone());
+            folders_to_check.push(PathWithBase { path: id.clone(), base_path: id.clone() });
         }
 
         //// PROGRESS THREAD START
@@ -518,10 +547,10 @@ impl DuplicateFinder {
             let current_folder = folders_to_check.pop().unwrap();
 
             // Read current dir, if permission are denied just go to next
-            let read_dir = match fs::read_dir(&current_folder) {
+            let read_dir = match fs::read_dir(&current_folder.path) {
                 Ok(t) => t,
                 Err(_) => {
-                    self.text_messages.warnings.push(format!("Cannot open dir {}", current_folder.display()));
+                    self.text_messages.warnings.push(format!("Cannot open dir {}", current_folder.path.display()));
                     continue;
                 } // Permissions denied
             };
@@ -531,14 +560,14 @@ impl DuplicateFinder {
                 let entry_data = match entry {
                     Ok(t) => t,
                     Err(_) => {
-                        self.text_messages.warnings.push(format!("Cannot read entry in dir {}", current_folder.display()));
+                        self.text_messages.warnings.push(format!("Cannot read entry in dir {}", current_folder.path.display()));
                         continue 'dir;
                     } //Permissions denied
                 };
                 let metadata: Metadata = match entry_data.metadata() {
                     Ok(t) => t,
                     Err(_) => {
-                        self.text_messages.warnings.push(format!("Cannot read metadata in dir {}", current_folder.display()));
+                        self.text_messages.warnings.push(format!("Cannot read metadata in dir {}", current_folder.path.display()));
                         continue 'dir;
                     } //Permissions denied
                 };
@@ -547,7 +576,7 @@ impl DuplicateFinder {
                         continue 'dir;
                     }
 
-                    let next_folder = current_folder.join(entry_data.file_name());
+                    let next_folder = current_folder.path.join(entry_data.file_name());
                     if self.directories.is_excluded(&next_folder) {
                         continue 'dir;
                     }
@@ -556,7 +585,10 @@ impl DuplicateFinder {
                         continue 'dir;
                     }
 
-                    folders_to_check.push(next_folder);
+                    folders_to_check.push(PathWithBase {
+                        path: next_folder,
+                        base_path: current_folder.base_path.clone(),
+                    });
                 } else if metadata.is_file() {
                     atomic_file_counter.fetch_add(1, Ordering::Relaxed);
                     // let mut have_valid_extension: bool;
@@ -577,7 +609,7 @@ impl DuplicateFinder {
                     }
                     // Checking files
                     if metadata.len() >= self.minimal_file_size {
-                        let current_file_name = current_folder.join(entry_data.file_name());
+                        let current_file_name = current_folder.path.join(entry_data.file_name());
                         if self.excluded_items.is_excluded(&current_file_name) {
                             continue 'dir;
                         }
@@ -600,6 +632,7 @@ impl DuplicateFinder {
                                 } // Permissions Denied
                             },
                             hash: "".to_string(),
+                            base_path: current_folder.base_path.clone(),
                         };
 
                         // Adding files to BTreeMap
@@ -628,7 +661,7 @@ impl DuplicateFinder {
                 vector = vec.clone();
             }
 
-            if vector.len() > 1 {
+            if vector.len() > 1 && self.check_exclusive_path(vec) {
                 self.information.number_of_duplicated_files_by_size += vector.len() - 1;
                 self.information.number_of_groups_by_size += 1;
                 self.information.lost_space_by_size += (vector.len() as u64 - 1) * size;
@@ -831,7 +864,9 @@ impl DuplicateFinder {
                                 for loaded_file_entry in loaded_vec_file_entry {
                                     if file_entry.path == loaded_file_entry.path && file_entry.modified_date == loaded_file_entry.modified_date {
                                         records_already_cached.entry(file_entry.size).or_insert_with(Vec::new);
-                                        records_already_cached.get_mut(&file_entry.size).unwrap().push(loaded_file_entry.clone());
+                                        let mut loaded_file_entry_with_base_path = loaded_file_entry.clone();
+                                        loaded_file_entry_with_base_path.base_path = file_entry.base_path.clone();
+                                        records_already_cached.get_mut(&file_entry.size).unwrap().push(loaded_file_entry_with_base_path);
                                         found = true;
                                         break;
                                     }
@@ -934,7 +969,7 @@ impl DuplicateFinder {
             self.information.bytes_read_when_hashing += bytes_read;
             self.text_messages.warnings.append(&mut errors);
             for (_hash, vec_file_entry) in hash_map {
-                if vec_file_entry.len() > 1 {
+                if vec_file_entry.len() > 1 && self.check_exclusive_path(&vec_file_entry) {
                     self.files_with_identical_hashes.entry(size).or_insert_with(Vec::new);
                     self.files_with_identical_hashes.get_mut(&size).unwrap().push(vec_file_entry);
                 }
@@ -1450,6 +1485,7 @@ fn load_hashes_from_file(text_messages: &mut Messages, type_of_hash: &HashType) 
                         }
                     },
                     hash: uuu[3].to_string(),
+                    base_path: PathBuf::from(""),
                 };
                 hashmap_loaded_entries.entry(file_entry.size).or_insert_with(Vec::new);
                 hashmap_loaded_entries.get_mut(&file_entry.size).unwrap().push(file_entry);
