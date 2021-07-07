@@ -62,6 +62,13 @@ pub struct FileEntry {
 
     pub year: i32,
     // pub time: u32,
+    pub base_path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct PathWithBase {
+    pub path: PathBuf,
+    pub base_path: PathBuf,
 }
 
 /// Info struck with helpful information's about results
@@ -89,6 +96,7 @@ pub struct SameMusic {
     excluded_items: ExcludedItems,
     minimal_file_size: u64,
     recursive_search: bool,
+    exclusive_path: bool,
     delete_method: DeleteMethod,
     music_similarity: MusicSimilarity,
     stopped_search: bool,
@@ -100,6 +108,7 @@ impl SameMusic {
             text_messages: Messages::new(),
             information: Info::new(),
             recursive_search: true,
+            exclusive_path: false,
             directories: Directories::new(),
             excluded_items: ExcludedItems::new(),
             music_entries: Vec::with_capacity(2048),
@@ -157,6 +166,10 @@ impl SameMusic {
         self.recursive_search = recursive_search;
     }
 
+    pub fn set_exclusive_path(&mut self, exclusive_path: bool) {
+        self.exclusive_path = exclusive_path;
+    }
+
     pub fn set_included_directory(&mut self, included_directory: Vec<PathBuf>) -> bool {
         self.directories.set_included_directory(included_directory, &mut self.text_messages)
     }
@@ -173,14 +186,26 @@ impl SameMusic {
         self.music_similarity = music_similarity;
     }
 
+    fn check_exclusive_path(&self, vec_file_entry: &[FileEntry]) -> bool {
+        if !self.exclusive_path {
+            return true;
+        }
+        let mut new_vec = vec_file_entry.to_vec();
+        new_vec.dedup_by_key(|e| e.base_path.clone());
+        if new_vec.len() > 1 {
+            return true;
+        }
+        false
+    }
+
     /// Check files for any with size == 0
     fn check_files(&mut self, stop_receiver: Option<&Receiver<()>>, progress_sender: Option<&futures::channel::mpsc::UnboundedSender<ProgressData>>) -> bool {
         let start_time: SystemTime = SystemTime::now();
-        let mut folders_to_check: Vec<PathBuf> = Vec::with_capacity(1024 * 2); // This should be small enough too not see to big difference and big enough to store most of paths without needing to resize vector
+        let mut folders_to_check: Vec<PathWithBase> = Vec::with_capacity(1024 * 2); // This should be small enough too not see to big difference and big enough to store most of paths without needing to resize vector
 
         // Add root folders for finding
         for id in &self.directories.included_directories {
-            folders_to_check.push(id.clone());
+            folders_to_check.push(PathWithBase { path: id.clone(), base_path: id.clone() });
         }
 
         //// PROGRESS THREAD START
@@ -222,10 +247,10 @@ impl SameMusic {
             let current_folder = folders_to_check.pop().unwrap();
 
             // Read current dir, if permission are denied just go to next
-            let read_dir = match fs::read_dir(&current_folder) {
+            let read_dir = match fs::read_dir(&current_folder.path) {
                 Ok(t) => t,
                 Err(_) => {
-                    self.text_messages.warnings.push(format!("Cannot open dir {}", current_folder.display()));
+                    self.text_messages.warnings.push(format!("Cannot open dir {}", current_folder.path.display()));
                     continue;
                 } // Permissions denied
             };
@@ -235,14 +260,14 @@ impl SameMusic {
                 let entry_data = match entry {
                     Ok(t) => t,
                     Err(_) => {
-                        self.text_messages.warnings.push(format!("Cannot read entry in dir {}", current_folder.display()));
+                        self.text_messages.warnings.push(format!("Cannot read entry in dir {}", current_folder.path.display()));
                         continue 'dir;
                     } //Permissions denied
                 };
                 let metadata: Metadata = match entry_data.metadata() {
                     Ok(t) => t,
                     Err(_) => {
-                        self.text_messages.warnings.push(format!("Cannot read metadata in dir {}", current_folder.display()));
+                        self.text_messages.warnings.push(format!("Cannot read metadata in dir {}", current_folder.path.display()));
                         continue 'dir;
                     } //Permissions denied
                 };
@@ -251,17 +276,20 @@ impl SameMusic {
                         continue 'dir;
                     }
 
-                    let next_folder = current_folder.join(entry_data.file_name());
+                    let next_folder = current_folder.path.join(entry_data.file_name());
                     if self.directories.is_excluded(&next_folder) || self.excluded_items.is_excluded(&next_folder) {
                         continue 'dir;
                     }
 
-                    folders_to_check.push(next_folder);
+                    folders_to_check.push(PathWithBase {
+                        path: next_folder,
+                        base_path: current_folder.base_path.clone(),
+                    });
                 } else if metadata.is_file() {
                     atomic_file_counter.fetch_add(1, Ordering::Relaxed);
                     // Checking files
                     if metadata.len() >= self.minimal_file_size {
-                        let current_file_name = current_folder.join(entry_data.file_name());
+                        let current_file_name = current_folder.path.join(entry_data.file_name());
                         if self.excluded_items.is_excluded(&current_file_name) {
                             continue 'dir;
                         }
@@ -295,6 +323,7 @@ impl SameMusic {
                             album_title: "".to_string(),
                             album_artist: "".to_string(),
                             year: 0,
+                            base_path: current_folder.base_path.clone(),
                         };
 
                         // Adding files to Vector
@@ -582,6 +611,15 @@ impl SameMusic {
             old_duplicates = new_duplicates;
             // new_duplicates = Vec::new();
         }
+
+        // Check for exclusive paths
+        new_duplicates = Vec::new();
+        for vec_file_entry in old_duplicates {
+            if self.check_exclusive_path(&vec_file_entry) {
+                new_duplicates.push(vec_file_entry);
+            }
+        }
+        old_duplicates = new_duplicates;
 
         self.duplicated_music_entries = old_duplicates;
 

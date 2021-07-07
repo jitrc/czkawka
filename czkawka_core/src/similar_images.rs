@@ -54,6 +54,13 @@ pub struct FileEntry {
     pub modified_date: u64,
     pub hash: Node,
     pub similarity: Similarity,
+    pub base_path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct PathWithBase {
+    pub path: PathBuf,
+    pub base_path: PathBuf,
 }
 
 /// Distance metric to use with the BK-tree.
@@ -74,6 +81,7 @@ pub struct SimilarImages {
     bktree: BKTree<Node, Hamming>,
     similar_vectors: Vec<Vec<FileEntry>>,
     recursive_search: bool,
+    exclusive_path: bool,
     minimal_file_size: u64,
     image_hashes: BTreeMap<Node, Vec<FileEntry>>, // Hashmap with image hashes and Vector with names of files
     stopped_search: bool,
@@ -107,6 +115,7 @@ impl SimilarImages {
             bktree: BKTree::new(Hamming),
             similar_vectors: vec![],
             recursive_search: true,
+            exclusive_path: false,
             minimal_file_size: 1024 * 16, // 16 KB should be enough to exclude too small images from search
             image_hashes: Default::default(),
             stopped_search: false,
@@ -140,6 +149,10 @@ impl SimilarImages {
         self.recursive_search = recursive_search;
     }
 
+    pub fn set_exclusive_path(&mut self, exclusive_path: bool) {
+        self.exclusive_path = exclusive_path;
+    }
+
     pub fn set_minimal_file_size(&mut self, minimal_file_size: u64) {
         self.minimal_file_size = match minimal_file_size {
             0 => 1,
@@ -167,6 +180,18 @@ impl SimilarImages {
         self.debug_print();
     }
 
+    fn check_exclusive_path(&self, vec_file_entry: &[FileEntry]) -> bool {
+        if !self.exclusive_path {
+            return true;
+        }
+        let mut new_vec = vec_file_entry.to_vec();
+        new_vec.dedup_by_key(|e| e.base_path.clone());
+        if new_vec.len() > 1 {
+            return true;
+        }
+        false
+    }
+
     // pub fn set_delete_folder(&mut self, delete_folder: bool) {
     //     self.delete_folders = delete_folder;
     // }
@@ -175,11 +200,11 @@ impl SimilarImages {
     /// Parameter initial_checking for second check before deleting to be sure that checked folder is still empty
     fn check_for_similar_images(&mut self, stop_receiver: Option<&Receiver<()>>, progress_sender: Option<&futures::channel::mpsc::UnboundedSender<ProgressData>>) -> bool {
         let start_time: SystemTime = SystemTime::now();
-        let mut folders_to_check: Vec<PathBuf> = Vec::with_capacity(1024 * 2); // This should be small enough too not see to big difference and big enough to store most of paths without needing to resize vector
+        let mut folders_to_check: Vec<PathWithBase> = Vec::with_capacity(1024 * 2); // This should be small enough too not see to big difference and big enough to store most of paths without needing to resize vector
 
         // Add root folders for finding
         for id in &self.directories.included_directories {
-            folders_to_check.push(id.clone());
+            folders_to_check.push(PathWithBase { path: id.clone(), base_path: id.clone() });
         }
 
         //// PROGRESS THREAD START
@@ -222,10 +247,10 @@ impl SimilarImages {
             let current_folder = folders_to_check.pop().unwrap();
 
             // Read current dir, if permission are denied just go to next
-            let read_dir = match fs::read_dir(&current_folder) {
+            let read_dir = match fs::read_dir(&current_folder.path) {
                 Ok(t) => t,
                 Err(_) => {
-                    self.text_messages.warnings.push(format!("Cannot open dir {}", current_folder.display()));
+                    self.text_messages.warnings.push(format!("Cannot open dir {}", current_folder.path.display()));
                     continue;
                 } // Permissions denied
             };
@@ -235,14 +260,14 @@ impl SimilarImages {
                 let entry_data = match entry {
                     Ok(t) => t,
                     Err(_) => {
-                        self.text_messages.warnings.push(format!("Cannot read entry in dir {}", current_folder.display()));
+                        self.text_messages.warnings.push(format!("Cannot read entry in dir {}", current_folder.path.display()));
                         continue;
                     } //Permissions denied
                 };
                 let metadata: Metadata = match entry_data.metadata() {
                     Ok(t) => t,
                     Err(_) => {
-                        self.text_messages.warnings.push(format!("Cannot read metadata in dir {}", current_folder.display()));
+                        self.text_messages.warnings.push(format!("Cannot read metadata in dir {}", current_folder.path.display()));
                         continue;
                     } //Permissions denied
                 };
@@ -251,7 +276,7 @@ impl SimilarImages {
                         continue;
                     }
 
-                    let next_folder = current_folder.join(entry_data.file_name());
+                    let next_folder = current_folder.path.join(entry_data.file_name());
                     if self.directories.is_excluded(&next_folder) {
                         continue 'dir;
                     }
@@ -260,7 +285,10 @@ impl SimilarImages {
                         continue 'dir;
                     }
 
-                    folders_to_check.push(next_folder);
+                    folders_to_check.push(PathWithBase {
+                        path: next_folder,
+                        base_path: current_folder.base_path.clone(),
+                    });
                 } else if metadata.is_file() {
                     atomic_file_counter.fetch_add(1, Ordering::Relaxed);
 
@@ -278,7 +306,7 @@ impl SimilarImages {
 
                     // Checking files
                     if metadata.len() >= self.minimal_file_size {
-                        let current_file_name = current_folder.join(entry_data.file_name());
+                        let current_file_name = current_folder.path.join(entry_data.file_name());
                         if self.excluded_items.is_excluded(&current_file_name) {
                             continue 'dir;
                         }
@@ -303,6 +331,7 @@ impl SimilarImages {
 
                             hash: [0; 8],
                             similarity: Similarity::None,
+                            base_path: current_folder.base_path.clone(),
                         };
 
                         self.images_to_check.insert(current_file_name.to_string_lossy().to_string(), fe);
@@ -348,7 +377,9 @@ impl SimilarImages {
                     non_cached_files_to_check.insert(name.clone(), file_entry.clone());
                 } else {
                     // Checking may be omitted when already there is entry with same size and modification date
-                    records_already_cached.insert(name.clone(), loaded_hash_map.get(name).unwrap().clone());
+                    let mut cached_file_entry_with_base_path = loaded_hash_map.get(name).unwrap().clone();
+                    cached_file_entry_with_base_path.base_path = file_entry.base_path.clone();
+                    records_already_cached.insert(name.clone(), cached_file_entry_with_base_path);
                 }
             }
         } else {
@@ -496,6 +527,7 @@ impl SimilarImages {
                     modified_date: fe.modified_date,
                     hash: fe.hash,
                     similarity: Similarity::VeryHigh,
+                    base_path: fe.base_path.clone(),
                 })
                 .collect();
 
@@ -526,13 +558,14 @@ impl SimilarImages {
                                     5 => Similarity::Minimal,
                                     _ => panic!("0-5 similarity levels are allowed, check if not added more."),
                                 },
+                                base_path: fe.base_path.clone(),
                             })
                             .collect::<Vec<_>>()),
                     );
                     non_cached_files_to_check.remove(*similar_hash);
                 }
             }
-            if vector_of_similar_images.len() > 1 {
+            if vector_of_similar_images.len() > 1 && self.check_exclusive_path(&vector_of_similar_images) {
                 // Not sure why it may happens
                 new_vector.push((*vector_of_similar_images).to_owned());
             }
@@ -794,6 +827,7 @@ fn load_hashes_from_file(text_messages: &mut Messages) -> Option<BTreeMap<String
                         },
                         hash,
                         similarity: Similarity::None,
+                        base_path: PathBuf::from(""),
                     },
                 );
             }

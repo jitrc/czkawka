@@ -68,6 +68,9 @@ pub fn connect_button_search(
     let check_button_music_album_title: gtk::CheckButton = gui_data.main_notebook.check_button_music_album_title.clone();
     let check_button_music_album_artist: gtk::CheckButton = gui_data.main_notebook.check_button_music_album_artist.clone();
     let check_button_music_year: gtk::CheckButton = gui_data.main_notebook.check_button_music_year.clone();
+    let check_button_exclusive: gtk::CheckButton = gui_data.main_notebook.check_button_exclusive.clone();
+    let check_button_images_exclusive = gui_data.main_notebook.check_button_images_exclusive.clone();
+    let check_button_music_exclusive = gui_data.main_notebook.check_button_music_exclusive.clone();
     let shared_buttons = gui_data.shared_buttons.clone();
     let tree_view_empty_folder_finder = gui_data.main_notebook.tree_view_empty_folder_finder.clone();
     let tree_view_empty_files_finder = gui_data.main_notebook.tree_view_empty_files_finder.clone();
@@ -146,6 +149,7 @@ pub fn connect_button_search(
                     panic!("No radio button is pressed");
                 }
                 let minimal_file_size = entry_duplicate_minimal_size.text().as_str().parse::<u64>().unwrap_or(1024);
+                let exclusive_path = check_button_exclusive.is_active();
 
                 let hash_type: HashType;
                 if radio_button_hash_type_blake3.is_active() {
@@ -165,6 +169,7 @@ pub fn connect_button_search(
                     df.set_included_directory(included_directories);
                     df.set_excluded_directory(excluded_directories);
                     df.set_recursive_search(recursive_search);
+                    df.set_exclusive_path(exclusive_path);
                     df.set_excluded_items(excluded_items);
                     df.set_allowed_extensions(allowed_extensions);
                     df.set_minimal_file_size(minimal_file_size);
@@ -269,6 +274,7 @@ pub fn connect_button_search(
                 get_list_store(&tree_view_similar_images_finder).clear();
 
                 let minimal_file_size = entry_similar_images_minimal_size.text().as_str().parse::<u64>().unwrap_or(1024 * 16);
+                let exclusive_path = check_button_images_exclusive.is_active();
 
                 let similarity;
                 if radio_button_similar_images_minimal.is_active() {
@@ -295,6 +301,7 @@ pub fn connect_button_search(
                     sf.set_included_directory(included_directories);
                     sf.set_excluded_directory(excluded_directories);
                     sf.set_recursive_search(recursive_search);
+                    sf.set_exclusive_path(exclusive_path);
                     sf.set_excluded_items(excluded_items);
                     sf.set_minimal_file_size(minimal_file_size);
                     sf.set_similarity(similarity);
@@ -332,6 +339,7 @@ pub fn connect_button_search(
                 get_list_store(&tree_view_same_music_finder).clear();
 
                 let minimal_file_size = entry_same_music_minimal_size.text().as_str().parse::<u64>().unwrap_or(1024);
+                let exclusive_path = check_button_music_exclusive.is_active();
 
                 let mut music_similarity: MusicSimilarity = MusicSimilarity::NONE;
 
@@ -362,6 +370,7 @@ pub fn connect_button_search(
                         mf.set_excluded_items(excluded_items);
                         mf.set_minimal_file_size(minimal_file_size);
                         mf.set_recursive_search(recursive_search);
+                        mf.set_exclusive_path(exclusive_path);
                         mf.set_music_similarity(music_similarity);
                         mf.find_same_music(Some(&stop_receiver), Some(&futures_sender_same_music));
                         let _ = glib_stop_sender.send(Message::SameMusic(mf));

@@ -33,6 +33,8 @@ pub enum Commands {
         #[structopt(flatten)]
         not_recursive: NotRecursive,
         #[structopt(flatten)]
+        exclusive_path: ExclusivePath,
+        #[structopt(flatten)]
         allow_hard_links: AllowHardLinks,
         #[structopt(flatten)]
         dryrun: DryRun,
@@ -117,6 +119,8 @@ pub enum Commands {
         file_to_save: FileToSave,
         #[structopt(flatten)]
         not_recursive: NotRecursive,
+        #[structopt(flatten)]
+        exclusive_path: ExclusivePath,
     },
     #[structopt(name = "zeroed", about = "Finds zeroed files", help_message = HELP_MESSAGE, after_help = "EXAMPLE:\n    czkawka zeroed -d /home/rafal -e /home/rafal/Pulpit -f results.txt")]
     ZeroedFiles {
@@ -153,6 +157,8 @@ pub enum Commands {
         file_to_save: FileToSave,
         #[structopt(flatten)]
         not_recursive: NotRecursive,
+        #[structopt(flatten)]
+        exclusive_path: ExclusivePath,
         #[structopt(short, long, parse(try_from_str = parse_minimal_file_size), default_value = "1024", help = "Minimum size in bytes", long_help = "Minimum size of checked files in bytes, assigning bigger value may speed up searching")]
         minimal_file_size: u64,
     },
@@ -225,6 +231,12 @@ pub struct AllowedExtensions {
 pub struct NotRecursive {
     #[structopt(short = "R", long, help = "Prevents from recursive check of folders")]
     pub not_recursive: bool,
+}
+
+#[derive(Debug, StructOpt)]
+pub struct ExclusivePath {
+    #[structopt(short = "E", long, help = "Show duplicates from exclusive search paths only")]
+    pub exclusive_path: bool,
 }
 
 #[derive(Debug, StructOpt)]
