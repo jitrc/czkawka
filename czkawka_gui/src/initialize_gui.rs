@@ -17,6 +17,7 @@ pub fn initialize_gui(gui_data: &mut GuiData) {
     {
         let buttons_search = gui_data.bottom_buttons.buttons_search.clone();
         let buttons_hide = gui_data.bottom_buttons.buttons_hide.clone();
+        let buttons_move = gui_data.bottom_buttons.buttons_move.clone();
         let buttons_save = gui_data.bottom_buttons.buttons_save.clone();
         let buttons_delete = gui_data.bottom_buttons.buttons_delete.clone();
         let buttons_select = gui_data.bottom_buttons.buttons_select.clone();
@@ -26,6 +27,7 @@ pub fn initialize_gui(gui_data: &mut GuiData) {
         // Disable and show buttons - only search button should be visible
         buttons_search.show();
         buttons_hide.hide();
+        buttons_move.hide();
         buttons_save.hide();
         buttons_delete.hide();
         buttons_select.hide();

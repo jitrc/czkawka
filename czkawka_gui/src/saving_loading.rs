@@ -530,7 +530,7 @@ pub fn reset_configuration(gui_data: &GuiData, manual_clearing: bool) {
     {
         let entry_excluded_items = gui_data.upper_notebook.entry_excluded_items.clone();
         if cfg!(target_family = "unix") {
-            entry_excluded_items.set_text("*/.git/*,*/node_modules/*,*/lost+found/*,*/Trash/*,*/.Trash-*/*,*/snap/*,/home/*/.cache/*");
+            entry_excluded_items.set_text("*/.git/*,*/node_modules/*,*/lost+found/*,*/Trash/*,*/.Trash-*/*,*/snap/*,/home/*/.cache/*,*!_MOVED_CZKAWAKA_*");
         }
         if cfg!(target_family = "windows") {
             entry_excluded_items.set_text("*\\.git\\*,*\\node_modules\\*,*\\lost+found\\*,*:\\windows\\*");
