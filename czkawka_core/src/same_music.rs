@@ -92,6 +92,7 @@ pub struct SameMusic {
     music_to_check: Vec<FileEntry>,
     music_entries: Vec<FileEntry>,
     duplicated_music_entries: Vec<Vec<FileEntry>>,
+    base_paths: BTreeMap<String, PathBuf>,
     directories: Directories,
     excluded_items: ExcludedItems,
     minimal_file_size: u64,
@@ -117,6 +118,7 @@ impl SameMusic {
             stopped_search: false,
             minimal_file_size: 1024,
             duplicated_music_entries: vec![],
+            base_paths: Default::default(),
             music_to_check: Vec::with_capacity(2048),
         }
     }
@@ -156,6 +158,10 @@ impl SameMusic {
 
     pub const fn get_information(&self) -> &Info {
         &self.information
+    }
+
+    pub const fn get_base_paths(&self) -> &BTreeMap<String, PathBuf> {
+        &self.base_paths
     }
 
     pub fn set_delete_method(&mut self, delete_method: DeleteMethod) {
@@ -328,6 +334,7 @@ impl SameMusic {
 
                         // Adding files to Vector
                         self.music_to_check.push(file_entry);
+                        self.base_paths.insert(current_file_name.to_string_lossy().to_string(), current_folder.base_path.clone());
                     }
                 }
             }

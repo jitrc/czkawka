@@ -35,7 +35,7 @@ impl ExcludedItems {
             }
             if expression == "DEFAULT" {
                 if cfg!(target_family = "unix") {
-                    checked_expressions.push("*/.git/*,*/node_modules/*,*/lost+found/*,*/Trash/*,*/.Trash-*/*,*/snap/*,/home/*/.cache/*".to_string());
+                    checked_expressions.push("*/.git/*,*/node_modules/*,*/lost+found/*,*/Trash/*,*/.Trash-*/*,*/snap/*,/home/*/.cache/*,*!_MOVED_CZKAWAKA_*".to_string());
                 }
                 if cfg!(target_family = "windows") {
                     checked_expressions.push("*\\.git\\*,*\\node_modules\\*,*\\lost+found\\*,*:\\windows\\*".to_string());

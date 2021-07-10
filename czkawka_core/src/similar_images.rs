@@ -80,6 +80,7 @@ pub struct SimilarImages {
     excluded_items: ExcludedItems,
     bktree: BKTree<Node, Hamming>,
     similar_vectors: Vec<Vec<FileEntry>>,
+    base_paths: BTreeMap<String, PathBuf>,
     recursive_search: bool,
     exclusive_path: bool,
     minimal_file_size: u64,
@@ -114,6 +115,7 @@ impl SimilarImages {
             excluded_items: Default::default(),
             bktree: BKTree::new(Hamming),
             similar_vectors: vec![],
+            base_paths: Default::default(),
             recursive_search: true,
             exclusive_path: false,
             minimal_file_size: 1024 * 16, // 16 KB should be enough to exclude too small images from search
@@ -139,6 +141,10 @@ impl SimilarImages {
 
     pub const fn get_information(&self) -> &Info {
         &self.information
+    }
+
+    pub const fn get_base_paths(&self) -> &BTreeMap<String, PathBuf> {
+        &self.base_paths
     }
 
     pub fn set_use_cache(&mut self, use_cache: bool) {
@@ -335,6 +341,7 @@ impl SimilarImages {
                         };
 
                         self.images_to_check.insert(current_file_name.to_string_lossy().to_string(), fe);
+                        self.base_paths.insert(current_file_name.to_string_lossy().to_string(), current_folder.base_path.clone());
                     }
                 }
             }

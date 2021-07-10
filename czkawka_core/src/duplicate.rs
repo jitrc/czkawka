@@ -147,6 +147,7 @@ pub struct DuplicateFinder {
     files_with_identical_names: BTreeMap<String, Vec<FileEntry>>,    // File Size, File Entry
     files_with_identical_size: BTreeMap<u64, Vec<FileEntry>>,        // File Size, File Entry
     files_with_identical_hashes: BTreeMap<u64, Vec<Vec<FileEntry>>>, // File Size, File Entry
+    base_paths: BTreeMap<String, PathBuf>,
     directories: Directories,
     allowed_extensions: Extensions,
     excluded_items: ExcludedItems,
@@ -171,6 +172,7 @@ impl DuplicateFinder {
             files_with_identical_names: Default::default(),
             files_with_identical_size: Default::default(),
             files_with_identical_hashes: Default::default(),
+            base_paths: Default::default(),
             recursive_search: true,
             exclusive_path: false,
             allowed_extensions: Extensions::new(),
@@ -256,6 +258,10 @@ impl DuplicateFinder {
 
     pub const fn get_information(&self) -> &Info {
         &self.information
+    }
+
+    pub const fn get_base_paths(&self) -> &BTreeMap<String, PathBuf> {
+        &self.base_paths
     }
 
     pub fn set_hash_type(&mut self, hash_type: HashType) {
@@ -462,6 +468,8 @@ impl DuplicateFinder {
                         // Adding files to BTreeMap
                         self.files_with_identical_names.entry(entry_data.file_name().to_string_lossy().to_string()).or_insert_with(Vec::new);
                         self.files_with_identical_names.get_mut(&entry_data.file_name().to_string_lossy().to_string()).unwrap().push(fe);
+
+                        self.base_paths.insert(current_file_name.to_string_lossy().to_string(), current_folder.base_path.clone());
                     }
                 }
             }
@@ -638,6 +646,8 @@ impl DuplicateFinder {
                         // Adding files to BTreeMap
                         self.files_with_identical_size.entry(metadata.len()).or_insert_with(Vec::new);
                         self.files_with_identical_size.get_mut(&metadata.len()).unwrap().push(fe);
+
+                        self.base_paths.insert(current_file_name.to_string_lossy().to_string(), current_folder.base_path.clone());
                     }
                 }
             }
@@ -1043,6 +1053,12 @@ impl Default for DuplicateFinder {
         Self::new()
     }
 }
+
+// impl GetBasePaths for DuplicateFinder {
+//     fn get_base_paths(&self) -> &BTreeMap<String, PathBuf> {
+//         &self.base_paths
+//     }
+// }
 
 impl DebugPrint for DuplicateFinder {
     #[allow(dead_code)]

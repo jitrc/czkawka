@@ -5,6 +5,7 @@ mod connect_about_buttons;
 mod connect_button_delete;
 mod connect_button_hardlink;
 mod connect_button_hide;
+mod connect_button_move;
 mod connect_button_save;
 mod connect_button_search;
 mod connect_button_select;
@@ -46,6 +47,7 @@ use crate::connect_about_buttons::*;
 use crate::connect_button_delete::*;
 use crate::connect_button_hardlink::*;
 use crate::connect_button_hide::*;
+use crate::connect_button_move::*;
 use crate::connect_button_save::*;
 use crate::connect_button_search::*;
 use crate::connect_button_select::*;
@@ -109,6 +111,7 @@ fn main() {
 
     connect_button_delete(&gui_data);
     connect_button_hide(&gui_data);
+    connect_button_move(&gui_data);
     connect_button_save(&gui_data);
     connect_button_search(
         &gui_data,
