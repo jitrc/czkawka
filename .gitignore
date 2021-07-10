@@ -10,3 +10,4 @@ linuxdeploy-plugin-gtk.sh
 *.AppImage
 /AppDir
 /Czkawka
+appimage_simple

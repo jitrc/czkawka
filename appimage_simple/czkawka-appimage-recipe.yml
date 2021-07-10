@@ -1,0 +1,11 @@
+app: czkawka
+
+ingredients:
+  script:
+    - mkdir -p czkawka
+
+script:
+  - pwd
+  - cp ../../../target/release/czkawka_gui ./usr/bin/czkawka_gui
+  - cp ../../../pkgs/com.github.qarmin.czkawka.desktop .
+  - cp ../../../data/icons/com.github.qarmin.czkawka.svg .
