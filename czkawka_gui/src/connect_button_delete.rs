@@ -313,16 +313,9 @@ pub fn empty_folder_remover(tree_view: &gtk::TreeView, column_file_name: i32, co
 fn trash_error_to_io_error(err: trash::Error) -> std::io::Error {
     match err {
         trash::Error::Unknown => std::io::Error::new(std::io::ErrorKind::Other, "Unknown Error"),
-        trash::Error::TargetedRoot => {
-            std::io::Error::new(std::io::ErrorKind::Other, "Targeted Root")
-        }
-        trash::Error::CanonicalizePath { code: _ } => {
-            std::io::Error::new(std::io::ErrorKind::NotFound, "Not found")
-        }
-        trash::Error::Remove { code: Some(1) } => std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "Cannot move files to trash from mounted system",
-        ),
+        trash::Error::TargetedRoot => std::io::Error::new(std::io::ErrorKind::Other, "Targeted Root"),
+        trash::Error::CanonicalizePath { code: _ } => std::io::Error::new(std::io::ErrorKind::NotFound, "Not found"),
+        trash::Error::Remove { code: Some(1) } => std::io::Error::new(std::io::ErrorKind::InvalidData, "Cannot move files to trash from mounted system"),
         _ => std::io::Error::new(std::io::ErrorKind::Other, "Unknown Error"),
     }
 }
@@ -407,23 +400,20 @@ pub fn tree_remove(tree_view: &gtk::TreeView, column_file_name: i32, column_path
                     Ok(_) => {
                         //messages += format!("Removed file {}/{}.\n", path, file_name).as_str();
                     }
-                    Err(_) => messages += format!(
-                        "Failed to remove file {}/{}. It is possible that you already deleted it, because similar images shows all possible file doesn't exists or you don't have permissions.\n",
-                        path, file_name
-                    )
-                    .as_str(),
+                    Err(_) => {
+                        messages += format!(
+                            "Failed to remove file {}/{}. It is possible that you already deleted it, because similar images shows all possible file doesn't exists or you don't have permissions.\n",
+                            path, file_name
+                        )
+                        .as_str()
+                    }
                 }
-                
             } else {
                 match trash::delete(format!("{}/{}", path.clone(), file_name.clone())) {
                     Ok(_) => {
                         //messages += format!("trashed file {}/{}.\n", path, file_name).as_str();
                     }
-                    Err(e) => messages += format!(
-                        "Failed to trash file {}/{} because {}.\n",
-                        path, file_name, trash_error_to_io_error(e)
-                    )
-                    .as_str(),
+                    Err(e) => messages += format!("Failed to trash file {}/{} because {}.\n", path, file_name, trash_error_to_io_error(e)).as_str(),
                 }
             }
 
